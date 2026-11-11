@@ -15,8 +15,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${manrope.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col">
+    // suppressHydrationWarning: browser extensions (e.g. Grammarly) add attributes to <html>/<body> before React
+    // loads. It covers only these two tags' own attributes; mismatches anywhere else are still reported.
+    <html lang="en" className={`${manrope.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
+      <body className="flex min-h-full flex-col" suppressHydrationWarning>
         <header className="sticky top-0 z-30 bg-[#06070a]/85 backdrop-blur-md">
           <div className="mx-auto grid max-w-6xl grid-cols-[1fr_auto] items-center px-5 py-4 md:grid-cols-[1fr_auto_1fr]">
             <Link href="/" aria-label="Allot home" className="justify-self-start">
