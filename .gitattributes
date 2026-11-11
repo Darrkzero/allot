@@ -1,0 +1,3 @@
+# Keep line endings consistent (LF) for everyone who clones the repo.
+* text=auto eol=lf
+*.ico binary
