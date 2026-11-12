@@ -6,7 +6,7 @@ import { CHAIN_NAMES } from "@/lib/assets";
 import type { Rule } from "@/lib/rules";
 import { POT_COLORS, SplitBar } from "./split-bar";
 
-type Estimate = { amountOut: string | null; feePct: number | null };
+type Estimate = { amountOut: string | null; feePct: number | null; approximate?: boolean };
 
 const SAMPLE_USD = 1000;
 const HIGH_FEE_PCT = 3; // worth flagging: usually a small pot going to Bitcoin
@@ -74,7 +74,13 @@ export function PayoutPreview({ rules }: { rules: Rule[] }) {
           );
         })}
       </ul>
-      <p className="text-xs text-white/50">{live ? "≈ what arrives after network fees, live from NEAR." : "Before network fees."}</p>
+      <p className="text-xs text-white/50">
+        {!live
+          ? "Before network fees."
+          : live.some((e) => e.approximate)
+            ? "≈ at market prices, before fees: NEAR's live quotes aren't responding right now."
+            : "≈ what arrives after network fees, live from NEAR."}
+      </p>
     </section>
   );
 }

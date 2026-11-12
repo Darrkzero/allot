@@ -3,7 +3,7 @@ import { rateLimit } from "@/lib/server/rate-limit";
 import { SETTLE_ASSET, toAtomic } from "@/lib/assets";
 import { getRouter, insertPayment } from "@/lib/server/db";
 import { errorResponse } from "@/lib/server/http";
-import { getTokens, OneClickError, requestQuote } from "@/lib/server/near/oneclick";
+import { getTokens, OneClickError, quotesDown, requestQuote } from "@/lib/server/near/oneclick";
 
 const MIN_USD = 1;
 const MAX_USD = 10_000;
@@ -34,6 +34,10 @@ export async function POST(request: Request) {
     const dry = body.dry !== false;
     const refundTo = String(body.refundTo ?? "").trim();
     if (!dry && !refundTo) return Response.json({ error: "Add your wallet address for refunds (on the network you're paying from)." }, { status: 400 });
+
+    // While 1Click is stalling, a preview would just hang ~25 s and fail; say so at once instead.
+    // (A real payment quote always tries: the payer asked for it explicitly.)
+    if (dry && quotesDown()) return Response.json({ error: QUOTES_DOWN }, { status: 503 });
 
     const amountOut = toAtomic(amountUsd, SETTLE_ASSET.decimals);
     const { quote } = await requestQuote({
@@ -84,11 +88,14 @@ export async function POST(request: Request) {
   } catch (e) {
     if (e instanceof OneClickError) {
       console.error("1Click quote error:", e.message); // keep the original for debugging
-      return Response.json({ error: friendlyQuoteError(e.message) }, { status: e.status >= 400 && e.status < 500 ? 400 : 502 });
+      const rejected = e.status >= 400 && e.status < 500;
+      return Response.json({ error: rejected ? friendlyQuoteError(e.message) : QUOTES_DOWN }, { status: rejected ? 400 : 502 });
     }
     return errorResponse(e);
   }
 }
+
+const QUOTES_DOWN = "NEAR Intents isn't returning prices right now. Please try again in a few minutes.";
 
 /** 1Click's quote errors, as something a payer can act on. */
 function friendlyQuoteError(message: string): string {

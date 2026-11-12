@@ -1,6 +1,6 @@
 import "server-only";
 import { SETTLE_ASSET, toAtomic, type ChainId } from "../../assets";
-import { getTokens, requestQuote } from "./oneclick";
+import { getTokens, OneClickError, quotesDown, requestQuote, type QuoteRequest } from "./oneclick";
 
 /**
  * Live price estimates from 1Click DRY quotes: nothing is created, reserved or sent.
@@ -35,28 +35,46 @@ async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>): Prom
   return value;
 }
 
-export type PaymentEstimate = { amountIn: string; symbol: string; chain: string; seconds: number | null };
+/** A quote for an estimate: skipped while 1Click is down, and given up on sooner than a real payment's. */
+function estimateQuote(req: QuoteRequest) {
+  if (quotesDown()) return Promise.reject(new OneClickError("Quotes unavailable", 503));
+  return requestQuote(req, { timeoutMs: 10_000 });
+}
+
+/** True when 1Click itself failed (down, slow, unreachable), not when it rejected this particular route or amount. */
+const serviceFailed = (e: unknown) => !(e instanceof OneClickError && e.status >= 400 && e.status < 500);
+
+/** Amount at the market price from 1Click's token list: the fallback while quotes are down. No fees included. */
+const atMarket = (usd: number, price: number) => (usd / price).toPrecision(4);
+
+// `approximate`: live quotes were unavailable, so the amount is the market price without fees.
+export type PaymentEstimate = { amountIn: string; symbol: string; chain: string; seconds: number | null; approximate?: boolean };
 
 /** What a payer would send, in `originAsset`, for the recipient to receive exactly `amountUsd` USDC. */
 export function paymentEstimate(amountUsd: number, originAsset: string): Promise<PaymentEstimate> {
   return cached(`pay:${originAsset}:${amountUsd}`, 20_000, async () => {
     const token = (await getTokens()).find((t) => t.assetId === originAsset);
     if (!token) throw new Error("Unknown currency.");
-    const { quote } = await requestQuote({
-      dry: true,
-      swapType: "EXACT_OUTPUT",
-      slippageTolerance: 100,
-      originAsset,
-      depositType: "ORIGIN_CHAIN",
-      destinationAsset: SETTLE_ASSET.assetId,
-      amount: toAtomic(amountUsd, SETTLE_ASSET.decimals),
-      recipient: QUOTE_ACCOUNT,
-      recipientType: "INTENTS",
-      refundTo: QUOTE_ACCOUNT,
-      refundType: "INTENTS",
-      deadline: deadline(),
-    });
-    return { amountIn: quote.amountInFormatted, symbol: token.symbol, chain: token.blockchain, seconds: quote.timeEstimate ?? null };
+    try {
+      const { quote } = await estimateQuote({
+        dry: true,
+        swapType: "EXACT_OUTPUT",
+        slippageTolerance: 100,
+        originAsset,
+        depositType: "ORIGIN_CHAIN",
+        destinationAsset: SETTLE_ASSET.assetId,
+        amount: toAtomic(amountUsd, SETTLE_ASSET.decimals),
+        recipient: QUOTE_ACCOUNT,
+        recipientType: "INTENTS",
+        refundTo: QUOTE_ACCOUNT,
+        refundType: "INTENTS",
+        deadline: deadline(),
+      });
+      return { amountIn: quote.amountInFormatted, symbol: token.symbol, chain: token.blockchain, seconds: quote.timeEstimate ?? null };
+    } catch (e) {
+      if (!serviceFailed(e) || !(token.price > 0)) throw e;
+      return { amountIn: atMarket(amountUsd, token.price), symbol: token.symbol, chain: token.blockchain, seconds: null, approximate: true };
+    }
   });
 }
 
@@ -68,6 +86,7 @@ export type PayoutEstimate = {
   amountOutUsd: number | null;
   feePct: number | null;
   seconds: number | null;
+  approximate?: boolean; // market price without fees: live quotes were unavailable
 };
 
 /** What each pot would actually receive from a payment of `totalUsd`, after conversion and network fees. */
@@ -81,7 +100,7 @@ export async function payoutEstimates(totalUsd: number, pots: { symbol: string; 
       if (!target || shareUsd < 0.5) return empty;
       try {
         return await cached(`payout:${target.assetId}:${shareUsd}`, 30_000, async () => {
-          const { quote } = await requestQuote({
+          const { quote } = await estimateQuote({
             dry: true,
             swapType: "EXACT_INPUT",
             slippageTolerance: 100,
@@ -105,8 +124,10 @@ export async function payoutEstimates(totalUsd: number, pots: { symbol: string; 
             seconds: quote.timeEstimate ?? null,
           };
         });
-      } catch {
-        return empty; // an estimate is a nice-to-have; the UI shows the plain share instead
+      } catch (e) {
+        // 1Click down: the market price, marked approximate. A rejected route (e.g. amount too small for
+        // this chain): the plain share. An estimate is a nice-to-have either way.
+        return serviceFailed(e) && target.price > 0 ? { ...empty, amountOut: atMarket(shareUsd, target.price), approximate: true } : empty;
       }
     })
   );

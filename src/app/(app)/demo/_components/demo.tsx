@@ -7,8 +7,9 @@ import { LockIcon } from "@/components/ui/lock-icon";
 import { chainLabel, type ChainId } from "@/lib/assets";
 
 type PayToken = { assetId: string; symbol: string; chain: string };
-type PaymentEstimate = { amountIn: string; symbol: string; chain: string; seconds: number | null };
-type PayoutEstimate = { shareUsd: number; amountOut: string | null; amountOutUsd: number | null; feePct: number | null; seconds: number | null };
+// `approximate`: NEAR's live quotes were unavailable, so the server used the market price (no fees).
+type PaymentEstimate = { amountIn: string; symbol: string; chain: string; seconds: number | null; approximate?: boolean };
+type PayoutEstimate = { shareUsd: number; amountOut: string | null; amountOutUsd: number | null; feePct: number | null; seconds: number | null; approximate?: boolean };
 type Pot = { label: string; percent: number; symbol: string; chain: ChainId; private?: boolean };
 
 // A sample recipient: one private pot and one Bitcoin pot show the interesting routes.
@@ -44,7 +45,8 @@ export default function Demo() {
   const [tokens, setTokens] = useState<PayToken[]>([]);
   const [assetId, setAssetId] = useState("");
   const [amount, setAmount] = useState("250");
-  const [payment, setPayment] = useState<(PaymentEstimate & { key: string }) | null>(null);
+  const [payment, setPayment] = useState<{ key: string; est: PaymentEstimate | null; error: string | null } | null>(null);
+  const [retry, setRetry] = useState(0);
   const [payouts, setPayouts] = useState<{ key: string; pots: PayoutEstimate[] } | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(0);
@@ -74,14 +76,16 @@ export default function Demo() {
     let cancelled = false;
     const t = setTimeout(async () => {
       const res = await fetch("/api/estimate/payment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amountUsd: usd, originAsset: assetId }) }).catch(() => null);
-      const json = res?.ok ? await res.json() : null;
-      if (!cancelled && json) setPayment({ ...json, key: payKey });
+      const json = res ? await res.json().catch(() => null) : null;
+      if (cancelled) return;
+      if (res?.ok && json) setPayment({ key: payKey, est: json, error: null });
+      else setPayment({ key: payKey, est: null, error: json?.error ?? "Couldn't reach the price service." });
     }, 400);
     return () => {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [payKey, usd, assetId]);
+  }, [payKey, usd, assetId, retry]);
 
   // Live estimate of what each pot receives (dry quotes).
   const potsKey = validAmount ? String(usd) : "";
@@ -99,8 +103,10 @@ export default function Demo() {
     };
   }, [potsKey, usd]);
 
-  const livePayment = payment?.key === payKey ? payment : null;
+  const priceState = payment?.key === payKey ? payment : null;
+  const livePayment = priceState?.est ?? null;
   const livePayouts = payouts?.key === potsKey ? payouts.pots : null;
+  const atMarketPrices = !!livePayouts?.some((p) => p.approximate);
 
   // Simulation clock: ticks only while a run is in progress.
   const elapsed = startedAt === null ? -1 : Math.max(0, (now - startedAt) / 1000);
@@ -174,18 +180,34 @@ export default function Demo() {
           <div className="rounded-xl bg-white/[0.04] p-4" aria-live="polite">
             {!validAmount ? (
               <p className="text-sm text-white/50">Enter an amount between $1 and $10,000.</p>
+            ) : priceState?.error ? (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-amber">{priceState.error}</p>
+                <button
+                  type="button"
+                  className="btn-ghost shrink-0 px-3 py-1.5 text-xs"
+                  onClick={() => {
+                    setPayment(null);
+                    setRetry((n) => n + 1);
+                  }}
+                >
+                  Try again
+                </button>
+              </div>
             ) : !livePayment ? (
               <p className="animate-pulse text-sm">Getting the live price…</p>
             ) : (
               <>
                 <p className="text-sm text-white/50">You&apos;d send</p>
                 <p className="text-2xl font-bold">
+                  {livePayment.approximate ? "≈ " : ""}
                   {Number(livePayment.amountIn).toLocaleString(undefined, { maximumFractionDigits: 8 })} {livePayment.symbol}
                   <span className="text-base font-medium text-white/50"> on {chainLabel(livePayment.chain)}</span>
                 </p>
                 <p className="text-sm text-white/55">
-                  {RECIPIENT} receives exactly ${usd.toFixed(2)}
-                  {livePayment.seconds ? ` · ${fmtTime(livePayment.seconds)}` : ""}
+                  {livePayment.approximate
+                    ? "At market price: NEAR's live quotes aren't responding right now, so fees aren't included."
+                    : `${RECIPIENT} receives exactly $${usd.toFixed(2)}${livePayment.seconds ? ` · ${fmtTime(livePayment.seconds)}` : ""}`}
                 </p>
               </>
             )}
@@ -235,7 +257,7 @@ export default function Demo() {
       <aside className="card space-y-4 lg:sticky lg:top-24">
         <div className="flex items-baseline justify-between">
           <h2 className="font-semibold">{RECIPIENT.split(" ")[0]}&apos;s pots</h2>
-          <span className="text-xs text-white/45">live estimates</span>
+          <span className="text-xs text-white/45">{atMarketPrices ? "market estimates" : "live estimates"}</span>
         </div>
         <div className="flex h-2.5 overflow-hidden rounded-full bg-white/5">
           {POTS.map((p, i) => (
@@ -269,7 +291,9 @@ export default function Demo() {
                   <AssetIcon symbol={p.symbol} chain={p.chain} size={24} />
                   <div className="min-w-0 text-sm leading-tight">
                     <p className="truncate font-medium">
-                      {est?.amountOut ? `${Number(est.amountOut).toLocaleString(undefined, { maximumFractionDigits: 8 })} ${p.symbol}` : `$${((usd || 0) * p.percent / 100).toFixed(2)}`}
+                      {est?.amountOut
+                        ? `${est.approximate ? "≈ " : ""}${Number(est.amountOut).toLocaleString(undefined, { maximumFractionDigits: 8 })} ${p.symbol}`
+                        : `$${((usd || 0) * p.percent / 100).toFixed(2)}`}
                     </p>
                     <p className="text-xs text-white/45">
                       on {chainLabel(p.chain)}
@@ -291,7 +315,9 @@ export default function Demo() {
             </Link>
           </div>
         ) : (
-          <p className="text-xs text-white/45">Fees and times are live quotes from NEAR for this amount.</p>
+          <p className="text-xs text-white/45">
+            {atMarketPrices ? "NEAR's live quotes aren't responding, so these use market prices, before fees." : "Fees and times are live quotes from NEAR for this amount."}
+          </p>
         )}
       </aside>
     </div>

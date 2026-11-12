@@ -57,12 +57,31 @@ export class OneClickError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
-export async function requestQuote(req: QuoteRequest): Promise<{ quote: Quote; raw: unknown }> {
+// 1Click's quote service sometimes stalls: every request then hangs ~25 s and fails with a 5xx.
+// After one such failure, price previews skip 1Click for a minute (quotesDown) instead of each
+// waiting it out. Any successful quote clears it. Real payment quotes always try.
+const OUTAGE_MS = 60_000;
+// Kept on globalThis: route handlers can each get their own copy of this module (seen in dev), and an
+// outage is a fact about 1Click, not about one route.
+const outage = ((globalThis as { __allotQuoteOutage?: { until: number } }).__allotQuoteOutage ??= { until: 0 });
+export const quotesDown = () => Date.now() < outage.until;
+
+export async function requestQuote(req: QuoteRequest, { timeoutMs = 30_000 } = {}): Promise<{ quote: Quote; raw: unknown }> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (env.oneClickKey) headers.Authorization = `Bearer ${env.oneClickKey}`;
-  const res = await fetch(`${BASE}/quote`, { method: "POST", headers, body: JSON.stringify(req), cache: "no-store", signal: AbortSignal.timeout(30_000) });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/quote`, { method: "POST", headers, body: JSON.stringify(req), cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
+  } catch (e) {
+    outage.until = Date.now() + OUTAGE_MS;
+    throw new OneClickError(e instanceof Error && e.name === "TimeoutError" ? "Quote timed out" : "Quote service unreachable", 503);
+  }
   const json = await res.json().catch(() => ({}));
-  if (!res.ok || !json.quote) throw new OneClickError(json.message || `Quote failed (HTTP ${res.status})`, res.status);
+  if (!res.ok || !json.quote) {
+    if (res.status >= 500) outage.until = Date.now() + OUTAGE_MS;
+    throw new OneClickError(json.message || `Quote failed (HTTP ${res.status})`, res.status);
+  }
+  outage.until = 0;
   return { quote: json.quote as Quote, raw: json };
 }
 
