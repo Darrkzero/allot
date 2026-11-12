@@ -19,7 +19,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // loads. It covers only these two tags' own attributes; mismatches anywhere else are still reported.
     <html lang="en" className={`${manrope.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="flex min-h-full flex-col" suppressHydrationWarning>
-        <header className="sticky top-0 z-30 bg-[#06070a]/85 backdrop-blur-md">
+        {/* No backdrop-blur: re-blurring the 3D hero on every scroll frame dropped integrated GPUs to ~25 fps. */}
+        <header className="sticky top-0 z-30 bg-[#06070a]/95">
           <div className="mx-auto grid max-w-6xl grid-cols-[1fr_auto] items-center px-5 py-4 md:grid-cols-[1fr_auto_1fr]">
             <Link href="/" aria-label="Allot home" className="justify-self-start">
               <Logo />

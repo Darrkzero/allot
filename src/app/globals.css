@@ -46,8 +46,10 @@ body {
 }
 
 /* ── Components ─────────────────────────────────────────────────────── */
+/* No backdrop-filter: cards sit on a smooth gradient, so the blur was invisible, but it was
+   re-rendered on every scroll frame and caused stutter on integrated GPUs. */
 .card {
-  @apply rounded-2xl border border-white/10 bg-white/[0.035] p-6 shadow-[0_1px_0_0_rgb(255_255_255/0.06)_inset,0_20px_60px_-30px_rgb(0_0_0/0.8)] backdrop-blur-xl;
+  @apply rounded-2xl border border-white/10 bg-white/[0.035] p-6 shadow-[0_1px_0_0_rgb(255_255_255/0.06)_inset,0_20px_60px_-30px_rgb(0_0_0/0.8)];
 }
 .input {
   @apply w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-mint/60 focus:bg-white/[0.06] focus:ring-4 focus:ring-mint/10 disabled:opacity-60;

@@ -253,6 +253,16 @@ export function edgeTexture() {
   return edge;
 }
 
+let white: THREE.DataTexture | null = null;
+/** 1×1 white texture: a no-op map that lets the coin edges share the face shader program. */
+export function whiteTexture() {
+  if (white) return white;
+  white = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  white.colorSpace = THREE.SRGBColorSpace;
+  white.needsUpdate = true;
+  return white;
+}
+
 /** Soft radial glow sprite. */
 export function glowTexture(color: string) {
   const [c, ctx] = canvas();

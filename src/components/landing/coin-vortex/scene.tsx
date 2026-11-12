@@ -5,7 +5,7 @@ import { Environment, Lightformer, PerformanceMonitor } from "@react-three/drei"
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import type { LogoToken } from "@/lib/logos/tokens";
-import { ALLOT, NAVY, edgeTexture, glowTexture, makeFace, type FacePalette, type Glyph } from "./textures";
+import { ALLOT, NAVY, edgeTexture, glowTexture, makeFace, whiteTexture, type FacePalette, type Glyph } from "./textures";
 
 // "Many coins in, one Allot": real token coins spiral in, lock into an orbit around the Allot coin,
 // react to the pointer, and speed up / spread out as the page scrolls.
@@ -30,13 +30,18 @@ const RIM = {
 };
 
 // Shared across coins: one edge material per rim colour, one face material per glyph.
+// Every coin surface uses the same texture slots (map + bumpMap + emissiveMap), so three.js builds ONE
+// shader program for all of them. Each program costs 0.2–0.6 s to compile on Windows/Direct3D.
 const edgeCache = new Map<string, THREE.Material>();
 const faceMatCache = new Map<string, THREE.Material>();
 
 function edgeMaterial(rim: keyof typeof RIM) {
   let m = edgeCache.get(rim);
   if (!m) {
-    m = new THREE.MeshStandardMaterial({ color: RIM[rim].color, metalness: 1, roughness: RIM[rim].roughness, bumpMap: edgeTexture(), bumpScale: 2, envMapIntensity: 1.6 });
+    m = new THREE.MeshStandardMaterial({
+      color: RIM[rim].color, metalness: 1, roughness: RIM[rim].roughness, bumpMap: edgeTexture(), bumpScale: 2, envMapIntensity: 1.6,
+      map: whiteTexture(), emissiveMap: whiteTexture(), // no-op (white map, black emissive): only here to share the program
+    });
     edgeCache.set(rim, m);
   }
   return m;
@@ -49,14 +54,13 @@ function faceMaterial(glyph: Glyph, palette: FacePalette) {
     const { map, bump } = makeFace(glyph, palette);
     m =
       glyph === "allot"
-        ? // Hero coin: physical clearcoat + glowing logo (only one of these exists, so the cost is fine)
-          new THREE.MeshPhysicalMaterial({
-            // Low env reflection keeps the face dark from any camera angle; the logo carries the glow.
-            map, bumpMap: bump, bumpScale: 6, metalness: 0.3, roughness: 0.45, clearcoat: 0.35, clearcoatRoughness: 0.35,
-            envMapIntensity: 0.2, emissive: new THREE.Color("#ffffff"), emissiveMap: map, emissiveIntensity: 1,
+        ? // Hero coin: low env reflection keeps the face dark from any angle; the logo carries the glow.
+          new THREE.MeshStandardMaterial({
+            map, bumpMap: bump, bumpScale: 6, metalness: 0.3, roughness: 0.4, envMapIntensity: 0.2,
+            emissive: new THREE.Color("#ffffff"), emissiveMap: map, emissiveIntensity: 1,
           })
-        : // Token coins: standard PBR is much cheaper than clearcoat and looks nearly identical at this size
-          new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: 6, metalness: 0.85, roughness: 0.26, envMapIntensity: 1.45 });
+        : // Token coins: emissive stays black, so emissiveMap adds no glow; it only keeps the shared program.
+          new THREE.MeshStandardMaterial({ map, bumpMap: bump, bumpScale: 6, metalness: 0.85, roughness: 0.26, envMapIntensity: 1.45, emissiveMap: map });
     faceMatCache.set(key, m);
   }
   return m;
@@ -120,7 +124,34 @@ function Rig({ motion }: { motion: Motion }) {
   return null;
 }
 
+/**
+ * Compiles every shader before the coins appear. With KHR_parallel_shader_compile (Chrome, Edge) this
+ * runs on background threads, so the page never freezes mid-intro. Without it the promise resolves at
+ * once and the first visible frame absorbs the work instead; the intro clock starts after that frame.
+ */
+function useShadersReady() {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let live = true;
+    const done = () => {
+      if (live) setReady(true);
+    };
+    // Runs after <Environment> has set scene.environment (layout effects run first), so the programs
+    // compiled here are the exact ones the first render uses.
+    gl.compileAsync(scene, camera).then(done, done);
+    return () => {
+      live = false;
+    };
+  }, [gl, scene, camera]);
+  return ready;
+}
+
 function Orbit({ motion }: { motion: Motion }) {
+  const ready = useShadersReady();
+  const shownFrames = useRef(0);
   const tilt = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Group>(null);
   const center = useRef<THREE.Group>(null);
@@ -130,7 +161,7 @@ function Orbit({ motion }: { motion: Motion }) {
   const spin = useRef(0);
   const look = useRef({ x: 0.3, y: 0, z: -0.06 });
   const scrollSmooth = useRef(0);
-  const t0 = useRef<number | null>(null); // intro clock starts at the first frame actually drawn
+  const t0 = useRef<number | null>(null); // intro clock: starts once the coins are on screen
   const announced = useRef(false);
 
   // Final orbit slots: a slightly wavy horizontal ring, faces turned outward and a little along the orbit.
@@ -153,9 +184,12 @@ function Orbit({ motion }: { motion: Motion }) {
   const glow = useMemo(() => glowTexture("rgba(59,240,176,0.5)"), []);
 
   useFrame((state, dt) => {
-    // Shader compilation can delay the first frame; measuring from it guarantees the intro is seen.
-    if (t0.current === null) t0.current = state.clock.elapsedTime;
-    const time = motion.reduced ? 99 : state.clock.elapsedTime - t0.current; // reduced motion: end state
+    if (!ready) return; // coins stay hidden while their shaders compile
+    // Frame 1 draws the start pose (and absorbs any leftover GPU setup); the clock starts on frame 2,
+    // so a slow first frame can never skip part of the intro.
+    shownFrames.current++;
+    if (shownFrames.current === 2) t0.current = state.clock.elapsedTime;
+    const time = motion.reduced ? 99 : t0.current === null ? 0 : state.clock.elapsedTime - t0.current; // reduced motion: end state
     if (!announced.current && time >= LANDED_AT) {
       announced.current = true;
       window.dispatchEvent(new Event("allot:coins-landed")); // hero cards + counters key off this
@@ -207,7 +241,7 @@ function Orbit({ motion }: { motion: Motion }) {
   });
 
   return (
-    <group position={[0, -0.35, 0]}>
+    <group position={[0, -0.35, 0]} visible={ready}>
       <group ref={tilt}>
         <group ref={ring}>
           {layout.map((c, i) => (
