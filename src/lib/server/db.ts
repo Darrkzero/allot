@@ -309,6 +309,26 @@ export function resetFailedLegs(paymentId: string, settleAsset: string): number 
 export const OPEN_PHASES: ReadonlySet<LegPhase> = new Set(["shield", "swap", "withdraw"]);
 
 /**
+ * Payments still waiting on 1Click (not yet paid, refunded or failed), from the last 4 days:
+ * deposit addresses stay open about 3 days. Least recently updated first.
+ */
+export function listOpenPayments(limit = 25): PaymentRow[] {
+  const since = new Date(Date.now() - 4 * 86_400_000).toISOString();
+  return conn()
+    .prepare(
+      `SELECT * FROM payments
+       WHERE status IN ('PENDING_DEPOSIT', 'KNOWN_DEPOSIT_TX', 'PROCESSING', 'INCOMPLETE_DEPOSIT') AND created_at > ?
+       ORDER BY updated_at LIMIT ?`
+    )
+    .all(since, limit) as PaymentRow[];
+}
+
+/** Cheap check that the database file is reachable (used by the health check). */
+export function dbHealthy(): boolean {
+  return (conn().prepare("SELECT 1 AS ok").get() as { ok: number } | undefined)?.ok === 1;
+}
+
+/**
  * Paid payments whose split isn't finished yet (for the sweeper). Unsplit payments first, then
  * the ones whose slices were touched longest ago, so every pending payment gets its turn.
  */

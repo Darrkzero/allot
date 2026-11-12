@@ -1,21 +1,16 @@
-import { rateLimit } from "@/lib/server/rate-limit";
-import { paymentsNeedingSplit } from "@/lib/server/db";
 import { errorResponse } from "@/lib/server/http";
-import { processPayment } from "@/lib/server/payments/split";
+import { sweepOnce } from "@/lib/server/payments/sweeper";
+import { rateLimit } from "@/lib/server/rate-limit";
 
-// Advances every paid payment whose split isn't finished. Idempotent: safe to call from a
-// cron job or the dashboard, in case nobody is watching a payment's status page.
+// Runs one pass of the background sweeper on demand: refreshes payments still waiting on 1Click and
+// advances unfinished splits. The server already does this every minute in production
+// (src/instrumentation.ts); this endpoint is for cron jobs or a manual nudge. Idempotent.
 export async function POST(request: Request) {
-  const limited = rateLimit(request, "sweep", 6, 60_000); // a cron job needs one call a minute
+  const limited = rateLimit(request, "sweep", 6, 60_000);
   if (limited) return limited;
   try {
-    const pending = paymentsNeedingSplit();
-    const results = [];
-    for (const p of pending) {
-      const legs = await processPayment(p.id);
-      results.push({ id: p.id, phases: legs.map((l) => l.phase) });
-    }
-    return Response.json({ processed: results.length, results });
+    const result = await sweepOnce();
+    return Response.json(result ?? { busy: true });
   } catch (e) {
     return errorResponse(e);
   }

@@ -129,9 +129,16 @@ npm run dev                # http://localhost:3000
 | `npm test` | Offline unit tests (no keys) |
 | `npm run e2e` | Full setup flow on NEAR mainnet with a software passkey (needs keys and `npm run dev`) |
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
-| `POST /api/split/sweep` | Advances every unfinished split; call it from a cron job in production |
+| `POST /api/split/sweep` | Runs one background pass on demand. The production server already does this every minute by itself ([instrumentation.ts](src/instrumentation.ts)), so payments complete even if nobody keeps a page open. |
 
-The app keeps its data in a SQLite file, so deploy it as **one** server process with a persistent disk (e.g. Railway, Render or Fly.io).
+### Deploy on Railway
+
+The app keeps its data in a SQLite file, so it runs as **one** server process with a persistent volume. [railway.json](railway.json) sets the build, start, health check (`/api/health`) and restart policy; Node 24 comes from `engines` in package.json.
+
+1. **New Project → Deploy from GitHub repo**, and pick this repo.
+2. **Add a volume** to the service, mounted at `/data`.
+3. **Variables:** `ALLOT_DB_PATH=/data/allot.db`, `NEAR_INTENTS_AGENT_API_URL`, `NEAR_INTENTS_AGENT_API_KEY`, `ALLOT_SECRET`, and optionally `NEAR_INTENTS_API_KEY`.
+4. **Settings → Networking → Generate Domain.** Passkeys are tied to this domain, so links created on localhost don't carry over.
 
 ## Code map
 
@@ -144,13 +151,14 @@ src/
 │   ├── (app)/pay/status/[id]/      live payment and split status
 │   ├── (app)/dashboard/[handle]/   owner dashboard (passkey sign-in)
 │   ├── (app)/demo/                 demo mode
-│   └── api/                        route handlers (links, pay, estimates, auth, dashboard, sweep)
+│   └── api/                        route handlers (links, pay, estimates, auth, dashboard, sweep, health)
+├── instrumentation.ts              starts the once-a-minute background sweeper in production
 ├── components/ui/ · landing/       shared UI · landing animation
 └── lib/
     ├── assets.ts · rules.ts        payout options, address checks, pot rules (browser + server)
     └── server/
         ├── near/                   Agent API, 1Click, policy, grant, quotes, payout routes
-        ├── payments/               split engine, payment refresh
+        ├── payments/               split engine, payment refresh, background sweeper
         ├── auth/                   passkey verification, sessions
         └── db.ts · seal.ts · rate-limit.ts · http.ts · env.ts · fx.ts
 tests/   unit/ (npm test) · e2e/ (npm run e2e)
