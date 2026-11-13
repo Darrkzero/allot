@@ -3,7 +3,7 @@ import { generateIntent, type PasskeyOwner } from "@/lib/server/near/agent-api";
 import { deletePendingRouter, getRouter, insertRouter } from "@/lib/server/db";
 import { policyFromRules } from "@/lib/server/near/policy";
 import { HANDLE_RE, validateRules } from "@/lib/rules";
-import { errorResponse } from "@/lib/server/http";
+import { errorResponse, readJson } from "@/lib/server/http";
 
 const SETUP_HOLD_MS = 15 * 60_000;
 
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const limited = rateLimit(request, "create-link", 10, 10 * 60_000); // link setups per IP
   if (limited) return limited;
   try {
-    const body = await request.json();
+    const body = await readJson(request);
     const handle = String(body.handle ?? "").trim().toLowerCase();
     const name = String(body.name ?? "").trim();
     if (!HANDLE_RE.test(handle)) return Response.json({ error: "Your link name needs 3 to 30 lowercase letters, numbers or dashes (it can't start or end with a dash)." }, { status: 400 });

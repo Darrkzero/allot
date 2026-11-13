@@ -1,5 +1,6 @@
 import "server-only";
 import { SETTLE_ASSET, toAtomic, type ChainId } from "../../assets";
+import { UserError } from "../http";
 import { getTokens, OneClickError, quotesDown, requestQuote, type QuoteRequest } from "./oneclick";
 
 /**
@@ -54,7 +55,7 @@ export type PaymentEstimate = { amountIn: string; symbol: string; chain: string;
 export function paymentEstimate(amountUsd: number, originAsset: string): Promise<PaymentEstimate> {
   return cached(`pay:${originAsset}:${amountUsd}`, 20_000, async () => {
     const token = (await getTokens()).find((t) => t.assetId === originAsset);
-    if (!token) throw new Error("Unknown currency.");
+    if (!token) throw new UserError("Unknown currency.");
     try {
       const { quote } = await estimateQuote({
         dry: true,

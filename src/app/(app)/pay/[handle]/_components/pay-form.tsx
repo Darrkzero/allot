@@ -133,7 +133,7 @@ export default function PayForm(props: {
       <section className="card space-y-6">
         <div>
           <p className="text-sm text-white/50">You&apos;re paying</p>
-          <h1 className="text-3xl font-bold tracking-tight">{props.name}</h1>
+          <h1 className="text-3xl font-bold tracking-tight wrap-anywhere">{props.name}</h1>
           <p className="mt-1 text-sm text-white/55">Pay with almost any crypto.</p>
         </div>
 

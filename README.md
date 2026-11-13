@@ -121,7 +121,7 @@ npm run dev                # http://localhost:3000
 | `NEAR_INTENTS_AGENT_API_KEY` | creating links, splitting | partners.demo.agentsonintents.com/dashboard |
 | `ALLOT_SECRET` | encrypting grants, signing sign-in cookies | any 32+ random characters |
 | `NEAR_INTENTS_API_KEY` | optional: 1Click partner key (lower fees) | partners.near-intents.org |
-| `ALLOT_DB_PATH`, `ALLOT_PROXY_HOPS` | optional | see [.env.example](.env.example) |
+| `ALLOT_DB_PATH`, `ALLOT_CLIENT_IP_HEADER`, `ALLOT_PROXY_HOPS` | optional | see [.env.example](.env.example) |
 
 | Command | What it does |
 |---|---|
@@ -139,6 +139,8 @@ The app keeps its data in a SQLite file, so it runs as **one** server process wi
 2. **Add a volume** to the service, mounted at `/data`.
 3. **Variables:** `ALLOT_DB_PATH=/data/allot.db`, `NEAR_INTENTS_AGENT_API_URL`, `NEAR_INTENTS_AGENT_API_KEY`, `ALLOT_SECRET`, and optionally `NEAR_INTENTS_API_KEY`.
 4. **Settings → Networking → Generate Domain.** Passkeys are tied to this domain, so links created on localhost don't carry over.
+
+On Railway, rate limits key on `X-Real-IP` automatically (its edge overwrites that header; the last `X-Forwarded-For` entry is an internal proxy address that changes per request). If `ALLOT_DB_PATH` is missing, the database goes on the attached volume anyway.
 
 ## Code map
 

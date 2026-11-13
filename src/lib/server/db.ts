@@ -5,7 +5,11 @@ import path from "node:path";
 import type { Rule } from "../rules";
 
 // Small SQLite store (Node's built-in driver; no native install).
-const DB_PATH = process.env.ALLOT_DB_PATH || path.join(process.cwd(), "data", "allot.db");
+// Without ALLOT_DB_PATH, a Railway volume is used when one is attached (Railway sets its mount path),
+// so a missing variable can't silently put the data on the container's throwaway disk.
+const DB_PATH =
+  process.env.ALLOT_DB_PATH ||
+  (process.env.RAILWAY_VOLUME_MOUNT_PATH ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, "allot.db") : path.join(process.cwd(), "data", "allot.db"));
 
 let db: DatabaseSync | null = null;
 function conn(): DatabaseSync {

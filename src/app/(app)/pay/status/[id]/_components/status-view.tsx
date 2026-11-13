@@ -124,11 +124,11 @@ export default function StatusView({ id }: { id: string }) {
 
   return (
     <div className="mx-auto grid max-w-4xl gap-6 md:grid-cols-[1fr_300px]">
-      <section className="card space-y-5">
+      <section className="card min-w-0 space-y-5">
         <div>
-          <p className="text-sm text-white/50">Payment to {p.name}</p>
+          <p className="text-sm text-white/50 wrap-anywhere">Payment to {p.name}</p>
           <h1 className="text-3xl font-bold tracking-tight">${p.amountUsd.toFixed(2)}</h1>
-          {p.memo && <p className="mt-1 text-sm text-white/60">For: {p.memo}</p>}
+          {p.memo && <p className="mt-1 text-sm text-white/60 wrap-anywhere">For: {p.memo}</p>}
         </div>
 
         {waiting && !expired && (

@@ -227,9 +227,9 @@ export default function Dashboard({ handle }: { handle: string }) {
             {data.payments.map((p) => (
               <li key={p.id} className="space-y-2 py-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <div>
+                  <div className="min-w-0">
                     <span className="text-lg font-semibold">{usd(p.amountUsd)}</span>
-                    {p.memo && <span className="text-white/60"> · {p.memo}</span>}
+                    {p.memo && <span className="text-white/60 wrap-anywhere"> · {p.memo}</span>}
                     <div className="text-xs text-white/50">
                       {new Date(p.createdAt).toLocaleString()} · paid with {p.paidWith.amount} {p.paidWith.symbol} on {chainName(p.paidWith.chain)}
                     </div>

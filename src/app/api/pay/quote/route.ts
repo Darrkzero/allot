@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { SETTLE_ASSET, toAtomic } from "@/lib/assets";
 import { getRouter, insertPayment } from "@/lib/server/db";
-import { errorResponse } from "@/lib/server/http";
+import { errorResponse, readJson } from "@/lib/server/http";
 import { getTokens, OneClickError, quotesDown, requestQuote } from "@/lib/server/near/oneclick";
 
 const MIN_USD = 1;
@@ -15,7 +15,7 @@ const MAX_USD = 10_000;
 // in their router's NEAR Intents balance, whatever the payer pays with.
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = await readJson(request);
     // Live price previews refresh as the payer types; real deposit addresses each create a payment record.
     const limited = body.dry === false ? rateLimit(request, "quote-live", 10, 10 * 60_000) : rateLimit(request, "quote-preview", 120, 60_000);
     if (limited) return limited;

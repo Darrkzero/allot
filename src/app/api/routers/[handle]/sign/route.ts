@@ -1,7 +1,7 @@
 import { getAgent, isFinalStatus, submitIntentOnce, waitForStatus } from "@/lib/server/near/agent-api";
 import { getRouter, updateRouter } from "@/lib/server/db";
 import { prepareGrant, STILL_CONFIRMING } from "@/lib/server/near/grant";
-import { errorResponse } from "@/lib/server/http";
+import { errorResponse, readJson } from "@/lib/server/http";
 import { rateLimit } from "@/lib/server/rate-limit";
 import { seal } from "@/lib/server/seal";
 
@@ -13,7 +13,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/routers/[ha
   if (limited) return limited;
   try {
     const { handle } = await ctx.params;
-    const { step, correlation_id, signed_data } = await request.json();
+    const body = await readJson(request);
+    const step = String(body.step ?? "");
+    const correlation_id = String(body.correlation_id ?? "");
+    const signed_data = body.signed_data;
     const router = getRouter(handle);
     if (!router || !router.agent_id) return Response.json({ error: "Setup not found. Start again." }, { status: 404 });
     if (router.setup?.[step] !== correlation_id) return Response.json({ error: "This signature doesn't match the current setup step." }, { status: 409 });
