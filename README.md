@@ -8,11 +8,24 @@ It's built on **NEAR Intents**: the [1Click API](https://docs.near-intents.org/)
 
 **Hackathon tracks:** `realworld` (main) · `privacy` · `security` · `open`
 
-> **Live:** [allot-production-6f6143df.up.railway.app](https://allot-production-6f6143df.up.railway.app) · [try the demo](https://allot-production-6f6143df.up.railway.app/demo) (no wallet needed) · Video: _link added after recording_
+> **Live:** [allot-production-6f6143df.up.railway.app](https://allot-production-6f6143df.up.railway.app) · [try the demo](https://allot-production-6f6143df.up.railway.app/demo) (no wallet needed) · [Demo video on X](https://x.com/Darrkzero/status/2121193219119612271)
 
 ---
 
+## The problem
+
+Freelancers and small businesses can be paid in crypto from anywhere, but it's clumsy for both sides:
+
+- **Payer and payee are on different networks.** USDT and USDC each exist on more than a dozen chains. Someone has to bridge, swap and buy gas, and money sent on the wrong network can be lost.
+- **Exchanges end up in the middle,** as the usual workaround, with their fees and custody.
+- **Nobody sets money aside.** People are told to split income the day it arrives: taxes, savings, spending. Banks offer "pots" for this; crypto has nothing equivalent, let alone across chains.
+- **Income is public.** Anyone who knows your address can see every payment you receive.
+
+Allot answers all four with one link: the client pays from any chain, the money lands in a wallet only the recipient controls, and every payment is split into pots, any of which can be private.
+
 ## Try it in 60 seconds: no wallet, no money, no keys
+
+Open the live demo: **[allot-production-6f6143df.up.railway.app/demo](https://allot-production-6f6143df.up.railway.app/demo)**. Or run it locally (Node.js 24+):
 
 ```bash
 npm install
@@ -20,32 +33,32 @@ npm run dev
 # open http://localhost:3000/demo
 ```
 
-The demo and the fee preview need **no API keys**: they use public 1Click *dry* quotes, which create and send nothing.
+The demo and the fee preview need no wallet and no API keys: they use public 1Click *dry* quotes, which create and send nothing.
 
 | Do | You'll see |
 |---|---|
-| Open **/demo** | A payment link for a sample business, "Ada Design Studio", and a **live** NEAR price for paying $250 in ETH on Arbitrum. |
+| Open **[/demo](https://allot-production-6f6143df.up.railway.app/demo)** | A payment link for a sample business, "Ada Design Studio", and a **live** NEAR price for paying $250 in ETH on Arbitrum. |
 | Change the amount or currency | The price and every pot's estimate update live. |
 | Look at **Ada's pots** | What actually arrives in each pot after fees: Spending (USDC on Base), Taxes (🔒 private, USDC on Arbitrum) and Savings (BTC). Small Bitcoin amounts show a visibly higher fee and ~8 min. |
 | Press **Simulate payment** | The payment journey, then the exact steps the real split engine runs per pot: *making private → converting → sending*. Timed from NEAR's own estimates, so Bitcoin finishes last. |
 | Press **Send Ada's money to a stranger** | The real `403 policy_destination_denied` that NEAR returned when we tried this on mainnet. |
-| Open **/create**, give a Bitcoin pot 2% | The "If you're paid $1,000" card shows what arrives per pot; the tiny Bitcoin pot turns amber with its fee (~8%). |
+| Open **[/create](https://allot-production-6f6143df.up.railway.app/create)**, give a Bitcoin pot 2% | The "If you're paid $1,000" card shows what arrives per pot; the tiny Bitcoin pot turns amber with its fee, several percent (Bitcoin's network fee on a $20 payout). |
 
 Without a 1Click partner key, quotes include 1Click's default fee, so numbers differ slightly from a configured deployment.
 
-## The full flow (with keys)
+## The full flow: create a real payment link
 
-Creating a link makes a **real, empty, policy-locked wallet on NEAR mainnet**, so it needs the keys in [.env.example](.env.example). No funds are needed to set up.
+**On the live site you only need a device with a passkey** (Windows Hello, Touch ID or Face ID, or an Android phone or iPhone): no keys, no wallet extension, no funds. Creating a link makes a **real, empty, policy-locked wallet on NEAR mainnet**, so use your own wallet addresses for the pots: anything paid to the link is paid out to them. To run this flow locally instead, fill in the keys from [.env.example](.env.example).
 
 | Step | Do | You'll see |
 |---|---|---|
-| 1 | **/create**: your name, a link name, and up to 5 pots (name, share, payout currency, your wallet address). Optionally switch a pot to **Private**. | A live "If you're paid $1,000" preview with fees. Private isn't offered where NEAR can't route it (USDT on Tron, TON, BNB Chain). |
-| 2 | **Create my payment link** | Three passkey prompts: create the passkey; confirm your pots (creates the wallet with its policy); turn on auto-split (grants Allot's server permission to act *inside* that policy). |
-| 3 | Open **/pay/&lt;link name&gt;** as a client | Six one-tap currencies (or search all of them), an exact live price, then a payment address and QR code. |
-| 4 | **/pay/status/&lt;id&gt;** | The payment's progress, then each pot's progress, with the private pot shown only as "🔒 Private pot · 20%". |
-| 5 | **/dashboard/&lt;link name&gt;** | Passkey sign-in, then: payments, totals per pot, a request-a-payment link builder, CSV export for an accountant, "Retry delayed pots", and renewal of the auto-split permission. |
+| 1 | Open **[/create](https://allot-production-6f6143df.up.railway.app/create)**: your name, a link name, and up to 5 pots (name, share, payout currency, your wallet address). Optionally switch a pot to **Private**. | A live "If you're paid $1,000" preview with fees. Private isn't offered where NEAR can't route it (USDT on Tron, TON, BNB Chain). |
+| 2 | Press **Create my payment link**, then **Confirm with passkey** twice | Three passkey prompts: create the passkey; confirm your pots (creates the wallet with its policy); turn on auto-split (grants Allot's server permission to act *inside* that policy). Then "Your payment link is live" with your `/pay/<link name>` address. |
+| 3 | Open **/pay/&lt;link name&gt;** as a client: enter an amount, pick a currency, add a refund address, press **Continue to payment** | Six one-tap currencies (or search all of them) and an exact live price, then a payment address and QR code, valid for 3 days. Nothing is charged unless funds are sent. |
+| 4 | Stay on that page, **/pay/status/&lt;id&gt;** | "Waiting for your payment", then once paid, each pot's progress, with the private pot shown only as "🔒 Private pot · 20%". |
+| 5 | Open **/dashboard/&lt;link name&gt;** and press **Sign in with passkey** | Payments, totals per pot, a request-a-payment link builder, CSV export for an accountant, "Retry delayed pots", and renewal of the auto-split permission. |
 
-`npm run e2e` runs steps 1 to 5 with a software passkey against NEAR mainnet (21 checks). Start `npm run dev` first.
+`npm run e2e` runs steps 1 to 5 locally with a software passkey against NEAR mainnet. Start `npm run dev` first; it prints 21 lines starting with ✓ and ends with `✅ E2E flow OK`.
 
 ---
 
@@ -104,7 +117,7 @@ Limits, as the Agent API itself documents them: this is access control, not cryp
 | The live deploy on Railway | `npm run check:deploy -- <url>`, 13 Nov | 131 checks pass: the full flow above, private pots hidden from every public page and API, HTML/script in names and memos shown as text, sessions, input validation, per-visitor rate limits that forged `X-Forwarded-For`/`X-Real-IP` can't dodge, security headers, and every page on desktop and phone with no errors |
 | Rate limits are per visitor | Manual, 13 Nov | With one network blocked (429), a phone on mobile data still got through |
 | Data survives a redeploy | Manual, 13 Nov | Test links and payments still there after a Railway redeploy (SQLite on a volume) |
-| A payment with real money, end to end | Manual | **Pending: planned before submission.** |
+| A payment with real money, end to end | Manual | **Not done** (no funds before the deadline). Each part is verified separately above: the deposit address and status tracking (deploy check), every split-engine call against the live wallet (accepted by policy), and the policy itself on mainnet. |
 
 The Agent API describes itself as an *experimental, mainnet-only beta*. Keep amounts small.
 
@@ -126,14 +139,14 @@ npm run dev                # http://localhost:3000
 | `NEAR_INTENTS_API_KEY` | optional: 1Click partner key (lower fees) | partners.near-intents.org |
 | `ALLOT_DB_PATH`, `ALLOT_CLIENT_IP_HEADER`, `ALLOT_PROXY_HOPS` | optional | see [.env.example](.env.example) |
 
-| Command | What it does |
-|---|---|
-| `npm run dev` / `npm run build` / `npm start` | Run, build, serve |
-| `npm test` | Offline unit tests (no keys) |
-| `npm run e2e` | Full setup flow on NEAR mainnet with a software passkey (needs keys and `npm run dev`) |
-| `npm run check:deploy -- <url>` | About 130 checks against a deployed instance, including every page in a real browser (Edge by default) |
-| `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
-| `POST /api/split/sweep` | Runs one background pass on demand. The production server already does this every minute by itself ([instrumentation.ts](src/instrumentation.ts)), so payments complete even if nobody keeps a page open. |
+| Command | What it does | When it works, you'll see |
+|---|---|---|
+| `npm run dev` / `npm run build` / `npm start` | Run, build, serve | `npm run build` prints `✓ Compiled successfully` |
+| `npm test` | Offline unit tests (no keys) | 8 lines starting with ✓, ending with `All engine checks passed.` |
+| `npm run e2e` | Full setup flow on NEAR mainnet with a software passkey (needs keys and `npm run dev`) | 21 lines starting with ✓, then `✅ E2E flow OK` |
+| `npm run check:deploy -- <url>` | About 130 checks against a deployed instance, including every page in a real browser (Edge by default) | `==== 131 passed, 0 failed, 0 warnings ====` |
+| `npm run lint` / `npm run typecheck` | ESLint / TypeScript | No errors |
+| `POST /api/split/sweep` | Runs one background pass on demand. The production server already does this every minute by itself ([instrumentation.ts](src/instrumentation.ts)), so payments complete even if nobody keeps a page open. | `{"refreshed":<n>,"split":<n>}`, or `{"busy":true}` while a pass is running |
 
 ### Deploy on Railway
 
@@ -177,6 +190,14 @@ docs/    PLAN.md (decisions and progress log) · RESEARCH.md (hackathon research
 ## Out of scope
 
 Cashing out to bank accounts · tax or KYC compliance (the CSV is for records) · recurring billing · mobile apps.
+
+## Disclosures
+
+- **Built during the hackathon.** There is no pre-hackathon code: research started on 6 Nov 2026, the scripts in [spike/](spike/) date from 8–11 Nov, and the repository's first commit is from 11 Nov, all after the 19 Oct announcement.
+- **AI-generated code.** Most of the code, tests and docs were written with an AI coding assistant (Claude Code), directed, reviewed and tested by the author.
+- **Template.** Scaffolded with `create-next-app` (Next.js 16).
+- **Libraries.** Next.js 16 and React 19; Tailwind CSS 4; three.js with @react-three/fiber and @react-three/drei (the landing page's 3D coins); qrcode (payment QR codes); Node's built-in `node:sqlite`. Development: TypeScript, ESLint, playwright-core (browser checks) and jiti (unit tests).
+- **NEAR services.** The 1Click API, the NEAR Intents Agent API (mainnet beta) and Confidential Intents. No custom smart contract.
 
 ## Credits and license
 
