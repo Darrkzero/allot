@@ -11,6 +11,7 @@
     "start": "next start",
     "lint": "eslint",
     "e2e": "node tests/e2e/setup-flow.mjs",
+    "check:deploy": "node tests/e2e/deploy-check.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node tests/unit/db.test.mjs && node tests/unit/engine.test.mjs"
   },

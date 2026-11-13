@@ -8,7 +8,7 @@ It's built on **NEAR Intents**: the [1Click API](https://docs.near-intents.org/)
 
 **Hackathon tracks:** `realworld` (main) · `privacy` · `security` · `open`
 
-> Live demo: _link added after deploy_ · Video: _link added after recording_
+> **Live:** [allot-production-6f6143df.up.railway.app](https://allot-production-6f6143df.up.railway.app) · [try the demo](https://allot-production-6f6143df.up.railway.app/demo) (no wallet needed) · Video: _link added after recording_
 
 ---
 
@@ -101,6 +101,9 @@ Limits, as the Agent API itself documents them: this is access control, not cryp
 | Full setup, renewal, payer quote, dashboard security | `npm run e2e`, mainnet, empty wallet | 21 checks pass |
 | Split-engine edge cases | `npm test`, offline against a mock NEAR API | 8 checks pass: retries, missing amounts, review pauses, nothing spendable yet |
 | The split engine's live calls | A simulated "paid" payment against an empty wallet | Withdraw, shield and the nBTC swap each stop only at "insufficient balance": accepted by policy |
+| The live deploy on Railway | `npm run check:deploy -- <url>`, 13 Nov | 131 checks pass: the full flow above, private pots hidden from every public page and API, HTML/script in names and memos shown as text, sessions, input validation, per-visitor rate limits that forged `X-Forwarded-For`/`X-Real-IP` can't dodge, security headers, and every page on desktop and phone with no errors |
+| Rate limits are per visitor | Manual, 13 Nov | With one network blocked (429), a phone on mobile data still got through |
+| Data survives a redeploy | Manual, 13 Nov | Test links and payments still there after a Railway redeploy (SQLite on a volume) |
 | A payment with real money, end to end | Manual | **Pending: planned before submission.** |
 
 The Agent API describes itself as an *experimental, mainnet-only beta*. Keep amounts small.
@@ -128,6 +131,7 @@ npm run dev                # http://localhost:3000
 | `npm run dev` / `npm run build` / `npm start` | Run, build, serve |
 | `npm test` | Offline unit tests (no keys) |
 | `npm run e2e` | Full setup flow on NEAR mainnet with a software passkey (needs keys and `npm run dev`) |
+| `npm run check:deploy -- <url>` | About 130 checks against a deployed instance, including every page in a real browser (Edge by default) |
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
 | `POST /api/split/sweep` | Runs one background pass on demand. The production server already does this every minute by itself ([instrumentation.ts](src/instrumentation.ts)), so payments complete even if nobody keeps a page open. |
 
@@ -139,6 +143,8 @@ The app keeps its data in a SQLite file, so it runs as **one** server process wi
 2. **Add a volume** to the service, mounted at `/data`.
 3. **Variables:** `ALLOT_DB_PATH=/data/allot.db`, `NEAR_INTENTS_AGENT_API_URL`, `NEAR_INTENTS_AGENT_API_KEY`, `ALLOT_SECRET`, and optionally `NEAR_INTENTS_API_KEY`.
 4. **Settings → Networking → Generate Domain.** Passkeys are tied to this domain, so links created on localhost don't carry over.
+
+Then check the deploy: `npm run check:deploy -- https://<your-domain>` (about 130 checks; it creates two test links with empty wallets and moves no funds).
 
 On Railway, rate limits key on `X-Real-IP` automatically (its edge overwrites that header; the last `X-Forwarded-For` entry is an internal proxy address that changes per request). If `ALLOT_DB_PATH` is missing, the database goes on the attached volume anyway.
 
@@ -163,7 +169,7 @@ src/
         ├── payments/               split engine, payment refresh, background sweeper
         ├── auth/                   passkey verification, sessions
         └── db.ts · seal.ts · rate-limit.ts · http.ts · env.ts · fx.ts
-tests/   unit/ (npm test) · e2e/ (npm run e2e)
+tests/   unit/ (npm test) · e2e/ (npm run e2e, npm run check:deploy)
 spike/   the mainnet experiments cited above (own package.json: cd spike && npm install)
 docs/    PLAN.md (decisions and progress log) · RESEARCH.md (hackathon research)
 ```
